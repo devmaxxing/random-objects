@@ -44,6 +44,38 @@
 				ws = new WebSocket('ws://localhost:8080/');
 				ws.onopen = function() {
 					console.log('CONNECT');
+					window.requestAnimationFrame = function rafOverride(callback) {
+						// Find canvas
+						var canvas = document.querySelector('canvas');
+						if (canvas) {
+							// Done capturing?
+							if (frames < 0) {
+							window.requestAnimationFrame = raf;
+							return raf(callback);
+							}
+
+							// Hold rendering until screenshot is done
+							if (!hold) {
+								hold = true;
+								frames--;
+								setTimeout(function () {
+									callback();
+									capture(canvas, function () {
+									// Resume rendering
+									hold = false;
+									rafOverride(next);
+									});
+								}, 50);
+							}
+							else {
+							next = callback;
+							}
+						}
+						else {
+							// Canvas not created yet?
+							return raf(callback);
+						}
+					}
 				};
 
 				ws.onclose = function() {
@@ -66,16 +98,18 @@
 			var hold = false;
 
 			function capture(canvas, callback) {
-				// Capture image and strip header from string.
-				var image = canvas.toDataURL('image/png').slice(22);
+				if (ws.readyState == 1) {
+					// Capture image and strip header from string.
+					var image = canvas.toDataURL('image/png').slice(22);
 
-				// Writing image as msg
-				ws.send(image);
+					// Writing image as msg
+					ws.send(image);
 
-				setTimeout(function () {
-					// Resume rendering
-					callback();
-				}, 5);
+					setTimeout(function () {
+						// Resume rendering
+						callback();
+					}, 50);
+				}
 			}
 			if ( WEBGL.isWebGLAvailable() === false ) {
 
@@ -88,6 +122,7 @@
 			var container, stats;
 
 			var camera, scene, renderer, controls;
+			var objectsGroup;
             var ball = new THREE.Mesh();
 
             init();
@@ -136,24 +171,30 @@
 
 					var index = 0;
 
-                    var diffuseColor = new THREE.Color(0xff0000);
+                    var diffuseColor = new THREE.Color(0x00ff00);
 
                     var material = new THREE.MeshPhysicalMaterial( {
                         color: diffuseColor,
                         metalness: 0,
-                        roughness: 0.5,
-                        clearCoat: 1.0,
+                        roughness: 1.0,
+                        clearCoat: 0.0,
                         clearCoatRoughness: 1.0,
-                        reflectivity: 1.0,
+                        reflectivity: 0.0,
                         envMap: hdrCubeRenderTarget.texture
                     } );
 
-                    ball = new THREE.Mesh( geometry, material );
+					objectsGroup = new THREE.Group();
+					objectsGroup.name = "objects";
+
+					ball = new THREE.Mesh( geometry, material );
+					ball.name = "ball";
                     ball.position.x = 10;
                     ball.position.y = 10;
-                    ball.position.z = 40;
+					ball.position.z = 40;
+					
+					objectsGroup.add(ball);
 
-                    scene.add( ball );
+                    scene.add( objectsGroup );
 
 					hdrCubeMap.magFilter = THREE.LinearFilter;
 					hdrCubeMap.needsUpdate = true;
@@ -189,40 +230,6 @@
 				controls = new THREE.OrbitControls( camera );
 
 				window.addEventListener( 'resize', onWindowResize, false );
-				if (ws.readyState == 1) {
-					window.requestAnimationFrame = function rafOverride(callback) {
-						// Find canvas
-						var canvas = document.querySelector('canvas');
-						if (canvas) {
-							// Done capturing?
-							if (frames < 0) {
-							window.requestAnimationFrame = raf;
-							return raf(callback);
-							}
-
-							// Hold rendering until screenshot is done
-							if (!hold) {
-							hold = true;
-							frames--;
-							setTimeout(function () {
-								callback();
-								capture(canvas, function () {
-								// Resume rendering
-								hold = false;
-								rafOverride(next);
-								});
-							}, 10);
-							}
-							else {
-							next = callback;
-							}
-						}
-						else {
-							// Canvas not created yet?
-							return raf(callback);
-						}
-					}
-				}	
 			}
 
 			function onWindowResize() {
@@ -249,13 +256,12 @@
                 var deltaTime = Date.now() - timer;
                 timer = Date.now() * 0.00025;
 
-                ball.position.x = Math.sin( timer ) * 199;
-                ball.position.z = Math.cos( timer ) * 193;
-                ball.position.y = Math.cos( timer ) * 211;
+				objectsGroup.position.x = Math.sin( timer * 11 ) * 260;
+				objectsGroup.position.z = Math.sin( timer * 7 ) * 100;
 
-				camera.position.x = Math.cos( timer ) * 811;
-                camera.position.z = Math.sin( timer ) * 971;
-                camera.position.y = Math.sin( timer ) * 991;
+				camera.position.x = Math.cos( timer ) * 600;
+                camera.position.z = Math.sin( timer ) * 550;
+                camera.position.y = Math.sin( timer ) * 600;
 
 				camera.lookAt( scene.position );
 
