@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - materials</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				color: #fff;
+				font-family: Monospace;
+				font-size: 13px;
+				text-align: center;
+
+				background-color: #000;
+				margin: 0px;
+				overflow: hidden;
+			}
+
+			#info {
+				position: absolute;
+				top: 0px; width: 100%;
+				padding: 5px;
+			}
+		</style>
+	</head>
+	<body>
+
+		<div id="container"></div>
+
+		<script src="js/three.min.js"></script>
+		<script src="js/OrbitControls.js"></script>
+		<script src="js/RGBELoader.js"></script>
+		<script src="js/HDRCubeTextureLoader.js"></script>
+
+		<script src="js/PMREMGenerator.js"></script>
+		<script src="js/PMREMCubeUVPacker.js"></script>
+
+		<script src="js/WebGL.js"></script>
+		<script src="js/dat.gui.min.js"></script>
+
+		<script>
+
+			if ( WEBGL.isWebGLAvailable() === false ) {
+
+				document.body.appendChild( WEBGL.getWebGLErrorMessage() );
+
+            }
+            
+            var timer;
+
+			var container, stats;
+
+			var camera, scene, renderer, controls;
+            var ball = new THREE.Mesh();
+
+            init();
+            animate();
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 2000 );
+				camera.position.set( 0.0, 400, 400 * 3.5 );
+
+				//
+
+				var genCubeUrls = function ( prefix, postfix ) {
+
+					return [
+						prefix + 'px' + postfix, prefix + 'nx' + postfix,
+						prefix + 'py' + postfix, prefix + 'ny' + postfix,
+						prefix + 'pz' + postfix, prefix + 'nz' + postfix
+					];
+
+				};
+
+				scene = new THREE.Scene();
+
+				var hdrUrls = genCubeUrls( './textures/cube/pisaHDR/', '.hdr' );
+				var hdrCubeRenderTarget = null;
+
+				new THREE.HDRCubeTextureLoader().load( THREE.UnsignedByteType, hdrUrls, function ( hdrCubeMap ) {
+
+					var pmremGenerator = new THREE.PMREMGenerator( hdrCubeMap );
+					pmremGenerator.update( renderer );
+
+					var pmremCubeUVPacker = new THREE.PMREMCubeUVPacker( pmremGenerator.cubeLods );
+					pmremCubeUVPacker.update( renderer );
+
+					hdrCubeRenderTarget = pmremCubeUVPacker.CubeUVRenderTarget;
+
+					// Materials
+
+					var sphereRadius = 100 * 0.8 * 0.5;
+
+					var geometry = new THREE.SphereBufferGeometry( sphereRadius, 32, 16 );
+
+					var index = 0;
+
+                    var diffuseColor = new THREE.Color(0xff0000);
+
+                    var material = new THREE.MeshPhysicalMaterial( {
+                        color: diffuseColor,
+                        metalness: 0,
+                        roughness: 0.5,
+                        clearCoat: 1.0,
+                        clearCoatRoughness: 1.0,
+                        reflectivity: 1.0,
+                        envMap: hdrCubeRenderTarget.texture
+                    } );
+
+                    ball = new THREE.Mesh( geometry, material );
+                    ball.position.x = 10;
+                    ball.position.y = 10;
+                    ball.position.z = 40;
+
+                    scene.add( ball );
+
+					hdrCubeMap.magFilter = THREE.LinearFilter;
+					hdrCubeMap.needsUpdate = true;
+					scene.background = hdrCubeMap;
+
+					pmremGenerator.dispose();
+					pmremCubeUVPacker.dispose();
+
+				} );
+
+				// Lights
+
+				scene.add( new THREE.AmbientLight( 0x222222 ) );
+
+				var directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
+				directionalLight.position.set( 1, 1, 1 ).normalize();
+				scene.add( directionalLight );
+
+				//
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				container.appendChild( renderer.domElement );
+
+				renderer.gammaInput = true;
+				renderer.gammaOutput = true;
+				renderer.toneMapping = THREE.Uncharted2ToneMapping;
+				renderer.toneMappingExposure = 0.75;
+
+				//
+
+				controls = new THREE.OrbitControls( camera );
+
+				window.addEventListener( 'resize', onWindowResize, false );
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			//
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+                timer = Date.now() * 0.00025;
+				render();
+
+			}
+
+			function render() {
+
+                var deltaTime = Date.now() - timer;
+                timer = Date.now() * 0.00025;
+
+                ball.position.x = Math.sin( timer ) * 199;
+                ball.position.z = Math.cos( timer ) * 193;
+                ball.position.y = Math.cos( timer ) * 211;
+
+				camera.position.x = Math.cos( timer ) * 811;
+                camera.position.z = Math.sin( timer ) * 971;
+                camera.position.y = Math.sin( timer ) * 991;
+
+				camera.lookAt( scene.position );
+
+				renderer.render( scene, camera );
+
+			}
+
+		</script>
+
+	</body>
+</html>
