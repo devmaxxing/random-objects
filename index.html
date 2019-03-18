@@ -39,7 +39,44 @@
 		<script src="js/dat.gui.min.js"></script>
 
 		<script>
+			var ws;
+			try {
+				ws = new WebSocket('ws://localhost:8080/');
+				ws.onopen = function() {
+					console.log('CONNECT');
+				};
 
+				ws.onclose = function() {
+					console.log('DISCONNECT');
+				};
+				ws.onmessage = function(event) {
+					console.log('MESSAGE: ' + event.data);
+				};
+			} catch (err) {
+				console.log(err);
+				ws = null;
+			}
+			
+
+			var frames = 1000;
+
+			// Request Animation Frame Override
+			var raf = window.requestAnimationFrame;
+			var next = null;
+			var hold = false;
+
+			function capture(canvas, callback) {
+				// Capture image and strip header from string.
+				var image = canvas.toDataURL('image/png').slice(22);
+
+				// Writing image as msg
+				ws.send(image);
+
+				setTimeout(function () {
+					// Resume rendering
+					callback();
+				}, 5);
+			}
 			if ( WEBGL.isWebGLAvailable() === false ) {
 
 				document.body.appendChild( WEBGL.getWebGLErrorMessage() );
@@ -139,7 +176,7 @@
 
 				renderer = new THREE.WebGLRenderer( { antialias: true } );
 				renderer.setPixelRatio( window.devicePixelRatio );
-				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setSize( 1600, 900 );
 				container.appendChild( renderer.domElement );
 
 				renderer.gammaInput = true;
@@ -152,6 +189,40 @@
 				controls = new THREE.OrbitControls( camera );
 
 				window.addEventListener( 'resize', onWindowResize, false );
+				if (ws.readyState == 1) {
+					window.requestAnimationFrame = function rafOverride(callback) {
+						// Find canvas
+						var canvas = document.querySelector('canvas');
+						if (canvas) {
+							// Done capturing?
+							if (frames < 0) {
+							window.requestAnimationFrame = raf;
+							return raf(callback);
+							}
+
+							// Hold rendering until screenshot is done
+							if (!hold) {
+							hold = true;
+							frames--;
+							setTimeout(function () {
+								callback();
+								capture(canvas, function () {
+								// Resume rendering
+								hold = false;
+								rafOverride(next);
+								});
+							}, 10);
+							}
+							else {
+							next = callback;
+							}
+						}
+						else {
+							// Canvas not created yet?
+							return raf(callback);
+						}
+					}
+				}	
 			}
 
 			function onWindowResize() {
