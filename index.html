@@ -65,7 +65,7 @@
 									hold = false;
 									rafOverride(next);
 									});
-								}, 50);
+								}, 10);
 							}
 							else {
 							next = callback;
@@ -117,16 +117,53 @@
 
             }
             
-            var timer;
+			var timer;
+			var previousTime = Date.now();
+			var orbitVelocities = [];
+			var otherObjects = [];
 
 			var container, stats;
 
 			var camera, scene, renderer, controls;
-			var objectsGroup;
+			var objectsGroup = new THREE.Group();
+			objectsGroup.name = "objects";
             var ball = new THREE.Mesh();
 
             init();
-            animate();
+			animate();
+			
+			function getRandomInt( max ) {
+				return Math.floor(Math.random() * max);
+			}
+
+			function getRandomNumber( min, max ) {
+				return min + Math.random() * (max - min);
+			}
+
+			function getRandomTorus() {
+				const radius = getRandomNumber(10, 45);
+				const tubeRadius = getRandomNumber(3, 5);
+				return new THREE.TorusBufferGeometry(radius, tubeRadius);
+			}
+
+			function getRandomCylinder() {
+				const radius = getRandomNumber(10, 45);
+				const height = getRandomNumber(10, 45);
+				return new THREE.CylinderBufferGeometry(radius, radius, height);
+			}
+
+			function getRandomCone() {
+				const radius = getRandomNumber(10, 45);
+				const height = getRandomNumber(10, 45);
+				return new THREE.ConeBufferGeometry(radius, height);
+			}
+
+			function getRandomBox() {
+				const width = getRandomNumber(10, 45);
+				const height = getRandomNumber(10, 45);
+				const depth = getRandomNumber(10, 45);
+				return new THREE.BoxBufferGeometry(width, height, depth);
+			}
 
 			function init() {
 
@@ -169,30 +206,84 @@
 
 					var geometry = new THREE.SphereBufferGeometry( sphereRadius, 32, 16 );
 
-					var index = 0;
+					var greenColor = new THREE.Color(0x00ff00);
+					var redColor = new THREE.Color(0xff0000);
 
-                    var diffuseColor = new THREE.Color(0x00ff00);
-
-                    var material = new THREE.MeshPhysicalMaterial( {
-                        color: diffuseColor,
+                    var greenMaterial = new THREE.MeshPhysicalMaterial({
+                        color: greenColor,
                         metalness: 0,
                         roughness: 1.0,
                         clearCoat: 0.0,
                         clearCoatRoughness: 1.0,
                         reflectivity: 0.0,
                         envMap: hdrCubeRenderTarget.texture
-                    } );
+					});
+					
+					var redMaterial = new THREE.MeshPhysicalMaterial({
+                        color: redColor,
+                        metalness: 0,
+                        roughness: 1.0,
+                        clearCoat: 0.0,
+                        clearCoatRoughness: 1.0,
+                        reflectivity: 0.0,
+                        envMap: hdrCubeRenderTarget.texture
+                    });
 
-					objectsGroup = new THREE.Group();
-					objectsGroup.name = "objects";
-
-					ball = new THREE.Mesh( geometry, material );
+					ball = new THREE.Mesh( geometry, redMaterial );
+					ball.visible = false;
 					ball.name = "ball";
-                    ball.position.x = 10;
-                    ball.position.y = 10;
-					ball.position.z = 40;
 					
 					objectsGroup.add(ball);
+					objectsGroup.position.x = 10;
+                    objectsGroup.position.y = 10;
+					objectsGroup.position.z = 40;
+
+					// brown ball
+
+					var brownMaterial = new THREE.MeshPhysicalMaterial({
+						color: new THREE.Color(0x654321),
+						metalness: 0,
+                        roughness: 1.0,
+                        clearCoat: 0.0,
+                        clearCoatRoughness: 1.0,
+                        reflectivity: 0.0,
+					});
+
+					var brownBallPivot = new THREE.Object3D();
+					var brownBall = new THREE.Mesh( new THREE.SphereBufferGeometry( sphereRadius, 32, 16 ), brownMaterial);
+					brownBall.position.x = 300;
+					brownBallPivot.add(brownBall);
+					brownBallPivot.rotation.x = Math.PI / 2;
+					orbitVelocities.push(getRandomNumber(0.001, 0.01));
+					otherObjects.push(brownBallPivot);
+					objectsGroup.add(brownBallPivot);
+
+					// other random objects
+					let materials = [redMaterial, greenMaterial];
+					let geometries = [getRandomBox, getRandomCone, getRandomCylinder, getRandomTorus];
+					const numOtherObjects = 15;
+					const maxOrbitRadius = 500;
+					const minOrbitRadius = 100;
+					const orbitVariation = maxOrbitRadius - minOrbitRadius;
+					const multipliers = [-1, 1];
+
+					for (let i = 0; i < numOtherObjects; i++) {
+						let geometry;
+						const shapeNumber = getRandomInt(geometries.length);
+						geometry = geometries[shapeNumber]();
+
+						const mesh = new THREE.Mesh(geometry, materials[getRandomInt(materials.length)]);
+						mesh.position.x = minOrbitRadius + Math.random() * orbitVariation;
+
+						const pivotPoint = new THREE.Object3D();
+						pivotPoint.add(mesh);
+
+						pivotPoint.rotation.x = Math.PI / 2;
+						pivotPoint.rotation.x += getRandomNumber(-0.75, 0.75);
+						orbitVelocities.push(getRandomNumber(0.001, 0.01) * multipliers[getRandomInt(2)]);
+						otherObjects.push(pivotPoint);
+						objectsGroup.add(pivotPoint);
+					}
 
                     scene.add( objectsGroup );
 
@@ -253,17 +344,24 @@
 
 			function render() {
 
-                var deltaTime = Date.now() - timer;
-                timer = Date.now() * 0.00025;
+				var deltaTime = Date.now() - previousTime;
+				previousTime = Date.now();
+                timer = previousTime * 0.00025;
 
 				objectsGroup.position.x = Math.sin( timer * 11 ) * 260;
 				objectsGroup.position.z = Math.sin( timer * 7 ) * 100;
+
+				for (let i = 0; i < otherObjects.length; i++) {
+					let pivotPoint = otherObjects[i];
+					pivotPoint.rotation.y += deltaTime * orbitVelocities[i];
+				}
 
 				camera.position.x = Math.cos( timer ) * 600;
                 camera.position.z = Math.sin( timer ) * 550;
                 camera.position.y = Math.sin( timer ) * 600;
 
 				camera.lookAt( scene.position );
+				objectsGroup.lookAt( camera.position );
 
 				renderer.render( scene, camera );
 

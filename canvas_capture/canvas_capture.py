@@ -8,6 +8,7 @@ png frames.
 import time
 import base64
 import binascii
+import sys
 from sys import stdin, stdout
 
 # From http://stackoverflow.com/a/9807138
@@ -28,12 +29,18 @@ def main():
     As each frame is received write it to a .png file
     '''
 
+    file_prefix = ''
+
+    if sys.argv[1]:
+        file_prefix = sys.argv[1]
+        print(file_prefix)
+
     frames = 0
     while True:
 
         received_val = stdin.readline()
         # Right pad filenames so they can be sorted
-        filename = str(time.time()).ljust(13, "0") + ".png"
+        filename = file_prefix + str(time.time()).ljust(13, "0") + ".png"
         with open(filename, 'wb') as file_handle:
             try:
                 file_handle.write(decode_base64(received_val))
